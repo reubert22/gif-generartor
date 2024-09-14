@@ -14,8 +14,13 @@ function App() {
   const [total, setTotal] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [offset, setOffset] = useState(0);
+  const limit = 50;
+  const totalPages = total / limit;
 
-  const handleOnChange = (value) => setSearch(value);
+  const handleOnChange = (value) => {
+    handleClearSearch();
+    setSearch(value);
+  };
 
   const handleClearSearch = () => {
     setSearch("");
@@ -26,20 +31,11 @@ function App() {
     setOffset(0);
   };
 
-  const handleLoadMore = () => {
-    const totalPages = total / 20;
-    if (currentPage + 1 <= totalPages) {
-      setCurrentPage(currentPage + 1);
-      setOffset(offset + 20 + 1);
-      handleGetGifs(offset + 20);
-    }
-  };
-
-  const handleGetGifs = async (offset) => {
+  const getGifs = async (offset) => {
     setLoading(true);
     try {
       const response = await axios.get(
-        `${BASE_URL}api_key=${API_KEY}&limit=20&offset=${
+        `${BASE_URL}api_key=${API_KEY}&limit=${limit}&offset=${
           offset ? offset : null
         }&q=${search}`
       );
@@ -54,50 +50,65 @@ function App() {
     }
   };
 
+  const handleLoadMore = () => {
+    if (currentPage + 1 <= totalPages) {
+      setCurrentPage(currentPage + 1);
+      setOffset(offset + limit);
+      getGifs(offset + limit);
+    }
+  };
+
+  const handleGetGifs = () => {
+    if (!!data.length) return;
+
+    getGifs(0);
+  };
+
   const hasData = data && !!data.length;
   const isEmpty = !hasData && !loading;
 
   return (
     <div className="App" style={{ overflow: "auto" }}>
-      <header className="App-header">
+      <div className="container-header">
+        <span>Search 4 Gifs</span>
+        <input
+          style={{ width: 500, height: 32, fontSize: 16 }}
+          value={search}
+          placeholder="Search..."
+          onChange={(e) => handleOnChange(e.target.value)}
+        />
+        <div>
+          <Button title="Search" onClick={handleGetGifs} disabled={!search} />
+          <Button title="Clear" onClick={handleClearSearch} />
+        </div>
+      </div>
+      <ContainerSections>
+        {hasData &&
+          data.map((gif) =>
+            gif.images ? <GifSection key={gif.id} gif={gif} /> : null
+          )}
         <div
           style={{
+            width: "100%",
             display: "flex",
-            flexDirection: "column",
-            height: 300,
             alignItems: "center",
-            justifyContent: "space-evenly",
-            width: "80%",
+            justifyContent: "center",
           }}
         >
-          <span>Search 4 Gifs</span>
-          <input
-            style={{ width: 500, height: 32 }}
-            value={search}
-            onChange={(e) => handleOnChange(e.target.value)}
-          />
-          <div>
+          {hasData && !loading && data.length < total && (
             <Button
-              title="Search"
-              onClick={() => handleGetGifs(0)}
-              disabled={!search}
+              disabled={loading}
+              title="Load more"
+              onClick={handleLoadMore}
             />
-            <Button title="Clear" onClick={handleClearSearch} />
-          </div>
-        </div>
-        {!!total && <TotalSection total={total} />}
-        <ContainerSections>
-          {hasData &&
-            data.map((gif) =>
-              gif.images ? <GifSection key={gif.id} gif={gif} /> : null
-            )}
-          {hasData && !loading && (
-            <Button title="Load more" onClick={handleLoadMore} />
           )}
-          {isEmpty && <EmptySection />}
-          {loading && <LoadingIndicator />}
-        </ContainerSections>
-      </header>
+        </div>
+        {isEmpty && <EmptySection />}
+        {loading && <LoadingIndicator />}
+      </ContainerSections>
+      {hasData && total && (
+        <TotalIndicatorSection showing={data.length} total={total} />
+      )}
     </div>
   );
 }
@@ -105,62 +116,53 @@ function App() {
 export default App;
 
 const GifSection = ({ gif }) => (
-  <div style={{ margin: 5 }}>
+  <div style={{ margin: 5, display: "flex", flexDirection: "column" }}>
     <img
-      alt="gif_generated"
+      alt={gif.alt_text}
       loading="lazy"
       src={gif.images.preview_gif.url}
       height={200}
       width={200}
     />
+    <div className="section-title-container">
+      <a
+        href={gif.bitly_url ?? undefined}
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{ color: "#fff", textDecoration: "none" }}
+      >
+        <span style={{ fontSize: 10 }}>{gif.title ?? "No title"}</span>
+      </a>
+    </div>
   </div>
 );
 
-const EmptySection = () => <p>No results yet!</p>;
+const EmptySection = () => (
+  <div className="empty-section">
+    <span>No results yet!</span>
+  </div>
+);
 
-const TotalSection = ({ total }) => (
-  <span style={{ fontSize: 16 }}>Total results: {total}</span>
+const TotalIndicatorSection = ({ showing, total }) => (
+  <div className="total-indicator-section">
+    <span style={{ fontSize: 12 }}>
+      Showing {showing} of {total}
+    </span>
+  </div>
 );
 
 const LoadingIndicator = () => (
-  <img
-    alt="loading indicator"
-    src={logo}
-    height={200}
-    width={200}
-    className="App-logo"
-  />
+  <div className="loading-section">
+    <img alt="loading indicator" src={logo} className="App-logo" />
+  </div>
 );
 
-const ContainerSections = ({ children }) => {
-  return (
-    <div
-      style={{
-        display: "flex",
-        width: "80%",
-        flexWrap: "wrap",
-        maxHeight: 300,
-        height: 300,
-        marginTop: 30,
-        overflow: "auto",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 8,
-        borderWidth: 1,
-        borderColor: "#cecece",
-        borderStyle: "solid",
-        borderRadius: 6,
-      }}
-    >
-      {children}
-    </div>
-  );
-};
+const ContainerSections = ({ children }) => (
+  <div className="container-section">{children}</div>
+);
 
-const Button = ({ title, onClick, disabled = false }) => {
-  return (
-    <button style={{ margin: 5 }} disabled={disabled} onClick={onClick}>
-      {title}
-    </button>
-  );
-};
+const Button = ({ title, onClick, disabled = false }) => (
+  <button disabled={disabled} onClick={onClick} className="button">
+    <span className="button-lbl">{title}</span>
+  </button>
+);
